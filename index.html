@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Leave a Message</title>
+<style>
+  :root{
+    --gold: #b8934a;
+    --gold-bright: #f1d878;
+    --black: #000000;
+    --red: #c0392b;
+    --white: #f5f5f0;
+    --paper: #ffffff;
+    --ink: #1c1c1c;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body{
+    width:100%; height:100%;
+    background: var(--black);
+    overflow:hidden;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: var(--white);
+    user-select: none;
+  }
+
+  #app{
+    position:relative;
+    width:100vw; height:100vh;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    background: var(--black);
+  }
+
+  /* ---------- shared screen layout ---------- */
+  .screen{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center;
+    padding: 6vh 6vw;
+    opacity:0; pointer-events:none;
+    transform: scale(1);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .screen.active{ opacity:1; pointer-events:auto; }
+  .screen.leaving{ opacity:0; transform: scale(1.06); }
+
+  /* ---------- Idle screen (customizable circular mark) ---------- */
+  #screen-idle{
+    background: var(--paper);
+    cursor: default;
+  }
+  #idleSvgWrap{
+    width: min(78vw, 78vh, 560px);
+    height: min(78vw, 78vh, 560px);
+    position: relative;
+  }
+  #idleSvgWrap svg{ width:100%; height:100%; display:block; }
+  #idleHotspot{
+    cursor: pointer;
+    transition: opacity .2s ease, transform .2s ease;
+    transform-origin: 250px 250px;
+  }
+  #idleHotspot:hover{ opacity: 0.85; }
+  #idleHotspot:active{ transform: scale(0.97); }
+
+  /* ---------- Loading ---------- */
+  .status-text{
+    margin-top: 4vh;
+    font-size: clamp(20px, 3vw, 30px);
+    color: var(--white);
+    letter-spacing:.05em;
+  }
+  #screen-loading .status-text{ margin-top:0; }
+
+  /* ---------- Buttons (dark screens) ---------- */
+  .btn{
+    font-family:'Georgia', serif;
+    background: transparent;
+    color: var(--gold-bright);
+    border: 2px solid var(--gold);
+    border-radius: 100px;
+    padding: 2.2vh 8vw;
+    font-size: clamp(22px, 3.4vw, 34px);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    cursor:pointer;
+    transition: all .25s ease;
+  }
+  .btn:active{ transform: scale(.96); }
+  .btn:hover, .btn:focus-visible{
+    background: var(--gold);
+    color: #000;
+    box-shadow: 0 0 60px rgba(212,175,55,.45);
+  }
+  .btn.stop{ border-color: var(--red); color: #ff8a75; }
+  .btn.stop:hover{ background: var(--red); color: #fff; box-shadow: 0 0 60px rgba(192,57,43,.45); }
+  .btn.ghost{
+    border-color: rgba(245,245,240,.35);
+    color: rgba(245,245,240,.75);
+    font-size: clamp(15px, 2vw, 20px);
+    padding: 1.4vh 5vw;
+  }
+  .btn.ghost:hover{ background: rgba(245,245,240,.1); color: var(--white); }
+
+  .btn-row{ display:flex; gap: 3vw; margin-top: 4vh; flex-wrap:wrap; justify-content:center; }
+
+  .error-box{
+    max-width: 600px;
+    color:#ff8a75;
+    font-size: clamp(15px, 2vw, 19px);
+    line-height:1.6;
+    margin-top:2vh;
+  }
+  .headline{
+    font-size: clamp(30px, 5vw, 54px);
+    font-weight:400;
+    letter-spacing:.04em;
+    color: var(--white);
+    line-height:1.15;
+    margin-bottom: 2vh;
+  }
+  .headline em{ font-style:italic; color: var(--gold-bright); }
+
+  /* ---------- Video / preview screens ---------- */
+  #videoWrap{
+    position:relative;
+    width: min(92vw, 620px);
+    aspect-ratio: 3/4;
+    border-radius: 24px;
+    overflow:hidden;
+    border: 2px solid rgba(212,175,55,.5);
+    box-shadow: 0 0 90px rgba(212,175,55,.15), inset 0 0 60px rgba(0,0,0,.6);
+    background:#000;
+  }
+  video{
+    width:100%; height:100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display:block;
+  }
+
+  .countdown-num{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size: clamp(120px, 22vw, 220px);
+    color: var(--gold-bright);
+    text-shadow: 0 0 60px rgba(212,175,55,.8);
+    font-weight:400;
+    animation: pulse .9s ease-out;
+    pointer-events:none;
+  }
+  @keyframes pulse{
+    0%{ transform: scale(1.6); opacity:0; }
+    30%{ opacity:1; }
+    100%{ transform: scale(1); opacity:1; }
+  }
+
+  .rec-indicator{
+    position:absolute; top:18px; left:18px;
+    display:flex; align-items:center; gap:10px;
+    background: rgba(0,0,0,.5);
+    padding: 8px 16px 8px 12px;
+    border-radius: 100px;
+    font-size: 14px;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    color:#ff8a75;
+  }
+  .rec-dot{ width:11px; height:11px; border-radius:50%; background: var(--red); animation: blink 1s infinite; }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
+
+  .timer{
+    position:absolute; top:18px; right:18px;
+    background: rgba(0,0,0,.5);
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-size: 14px;
+    letter-spacing:.1em;
+    color: var(--gold-bright);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-track{
+    width: min(80vw, 400px);
+    height: 6px;
+    background: rgba(245,245,240,.15);
+    border-radius: 10px;
+    margin-top: 3vh;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:0%;
+    background: linear-gradient(90deg, var(--gold), var(--gold-bright));
+    transition: width .1s linear;
+  }
+
+  .saved-icon{
+    font-size: clamp(50px, 8vw, 80px);
+    color: var(--gold-bright);
+    margin-bottom: 3vh;
+  }
+
+  #fsBtn{
+    position:fixed; bottom: 3vh; right: 3vw;
+    background: transparent;
+    border: 1px solid rgba(120,120,120,.3);
+    color: rgba(120,120,120,.6);
+    border-radius: 100px;
+    padding: 10px 20px;
+    font-size: 13px;
+    letter-spacing: .1em;
+    font-family: 'Georgia', serif;
+    text-transform: uppercase;
+    cursor:pointer;
+    z-index: 50;
+    transition: all .2s ease;
+  }
+  #fsBtn:hover{ color: var(--gold); border-color: var(--gold); }
+
+  /* ---------- Choice screen ---------- */
+  .eyebrow{
+    font-size: clamp(14px, 1.6vw, 18px);
+    letter-spacing: .3em;
+    text-transform: uppercase;
+    color: var(--gold-bright);
+    margin-bottom: 1vh;
+  }
+  .choice-row{ display:flex; gap:6vw; margin-top:5vh; }
+  .choice-btn{
+    display:flex; flex-direction:column; align-items:center; gap:1.8vh;
+    background: rgba(255,255,255,.03);
+    border: 2px solid var(--gold);
+    border-radius: 22px;
+    padding: 5vh 6vw;
+    color: var(--gold-bright);
+    cursor:pointer;
+    font-family:'Georgia', serif;
+    transition: all .25s ease;
+  }
+  .choice-btn:hover, .choice-btn:focus-visible{
+    background: var(--gold);
+    color:#000;
+    box-shadow: 0 0 60px rgba(212,175,55,.45);
+    transform: translateY(-4px);
+  }
+  .choice-btn:active{ transform: scale(.96); }
+  .choice-icon{ font-size: clamp(36px, 6vw, 56px); line-height:1; }
+  .choice-label{ font-size: clamp(17px, 2.2vw, 23px); letter-spacing:.12em; text-transform:uppercase; }
+
+  /* ---------- Video frame (shared by filter/countdown screens) ---------- */
+  .video-frame{
+    position:relative;
+    width: min(92vw, 620px);
+    aspect-ratio: 3/4;
+    border-radius: 24px;
+    overflow:hidden;
+    border: 2px solid rgba(212,175,55,.5);
+    box-shadow: 0 0 90px rgba(212,175,55,.15), inset 0 0 60px rgba(0,0,0,.6);
+    background:#000;
+  }
+  .video-frame video{
+    width:100%; height:100%;
+    object-fit:cover;
+    transform: scaleX(-1);
+    display:block;
+    transition: filter .2s ease;
+  }
+  .flash-overlay{
+    position:absolute; inset:0;
+    background:#fff;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .12s ease-out;
+  }
+  .flash-overlay.flash{ opacity:.85; transition: opacity .04s ease-in; }
+
+  /* ---------- Filter picker ---------- */
+  .filter-row{
+    display:flex; gap: 3vw;
+    margin-top: 3vh;
+    flex-wrap:wrap; justify-content:center;
+    max-width: 92vw;
+  }
+  .filter-swatch{
+    display:flex; flex-direction:column; align-items:center; gap:1vh;
+    background:transparent; border:none; cursor:pointer;
+    color: rgba(245,245,240,.7);
+    font-family:'Georgia', serif;
+    padding: .5vh; border-radius:14px;
+    transition: color .2s ease;
+  }
+  .filter-swatch .dot{
+    width: 44px; height:44px; border-radius:50%;
+    border: 2px solid rgba(212,175,55,.4);
+    transition: all .2s ease;
+  }
+  .filter-swatch.active{ color: var(--gold-bright); }
+  .filter-swatch.active .dot{
+    border-color: var(--gold-bright);
+    box-shadow: 0 0 20px rgba(212,175,55,.55);
+    transform: scale(1.1);
+  }
+  .filter-swatch .name{
+    font-size: clamp(11px, 1.3vw, 13px);
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    white-space:nowrap;
+  }
+
+
+  /* ---------- Wedding overlay filter ---------- */
+  .wedding-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    display:none;
+  }
+
+  .wedding-overlay.active{ display:block; }
+
+  .wedding-overlay svg{
+    width:100%;
+    height:100%;
+    display:block;
+  }
+
+  .overlay-customizer{
+    width:min(92vw, 620px);
+    margin-top:2vh;
+    display:none;
+    grid-template-columns: 1fr;
+    gap:1vh;
+  }
+
+  .overlay-customizer.active{ display:grid; }
+
+  .overlay-customizer input{
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    border:1px solid rgba(212,175,55,.5);
+    background:rgba(255,255,255,.05);
+    color:var(--white);
+    font-family:'Georgia', serif;
+    font-size:16px;
+    text-align:center;
+    outline:none;
+  }
+
+  .overlay-customizer input:focus{
+    border-color:var(--gold-bright);
+    box-shadow:0 0 20px rgba(212,175,55,.2);
+  }
+
+  .overlay-label{
+    color:rgba(245,245,240,.7);
+    font-size:13px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+
+  .small-btn{
+    font-family:'Georgia', serif;
+    background:transparent;
+    color:var(--gold-bright);
+    border:1px solid rgba(212,175,55,.6);
+    border-radius:100px;
+    padding:10px 18px;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+
+  /* ---------- Done screen media ---------- */
+  #donePhotoWrap img, #doneVideoWrap video{
+    width: min(46vw, 230px);
+    border-radius: 16px;
+    border: 2px solid rgba(212,175,55,.4);
+    margin-bottom: 2vh;
+    display:block;
+  }
+  .btn.ghost.danger{
+    border-color: rgba(192,57,43,.4);
+    color: #ff8a75;
+  }
+  .btn.ghost.danger:hover{ background: rgba(192,57,43,.15); color:#fff; border-color: var(--red); }
+
+  /* ---------- QR screen ---------- */
+  #qrBox{
+    background:#fff;
+    padding: 16px;
+    border-radius: 16px;
+    margin-top: 1.5vh;
+    min-height: 190px; min-width: 190px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #qrBox img, #qrBox canvas{ display:block; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- IDLE SCREEN — fully customizable via CONFIG in <script> below -->
+  <section class="screen active" id="screen-idle">
+    <div id="idleSvgWrap"></div>
+  </section>
+
+  <!-- CHOICE: picture or video -->
+  <section class="screen" id="screen-choice">
+    <!-- <div class="headline">Leave a</div> need to check -->
+    <div class="headline"> <em>Leave a<br></em>Picture or<br><em>Video?</em></div>
+    <div class="choice-row">
+      <button class="choice-btn" id="choosePhotoBtn">
+        <span class="choice-icon">📷</span>
+        <span class="choice-label">Picture</span>
+      </button>
+      <button class="choice-btn" id="chooseVideoBtn">
+        <span class="choice-icon">🎥</span>
+        <span class="choice-label">Video</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section class="screen" id="screen-loading">
+    <div class="status-text">Waking the mirror…</div>
+  </section>
+
+  <!-- ERROR -->
+  <section class="screen" id="screen-error">
+    <div class="headline">Can't See You</div>
+    <div class="error-box" id="errorMsg">Camera and microphone access is needed.</div>
+    <div class="btn-row">
+      <button class="btn ghost" id="retryBtn">Try Again</button>
+      <button class="btn ghost" id="backBtn">Back</button>
+    </div>
+  </section>
+
+  <!-- FILTER PICKER -->
+  <section class="screen" id="screen-filter">
+    <div class="headline" style="margin-bottom:1vh;">Choose a <em>Filter</em></div>
+
+    <div class="video-frame" id="filterVideoWrap">
+      <video id="filterVideo" autoplay playsinline muted></video>
+      <div class="wedding-overlay" id="filterWeddingOverlay"></div>
+    </div>
+
+    <div class="filter-row" id="filterSwatches"></div>
+
+    <button class="small-btn" id="customizeOverlayBtn" style="display:none; margin-top:1.8vh;">Customize Frame</button>
+
+    <div class="overlay-customizer" id="overlayCustomizer">
+      <div class="overlay-label">Date</div>
+      <input id="overlayDateInput" value="08 • 23 • 2026">
+
+      <div class="overlay-label">Top Text</div>
+      <input id="overlayTopInput" value="OUR WEDDING">
+
+      <div class="overlay-label">Bottom Text</div>
+      <input id="overlayBottomInput" value="ENTER NAMES">
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="filterContinueBtn">Continue</button>
+      <button class="btn ghost" id="filterBackBtn">Back</button>
+    </div>
+  </section>
+
+  <!-- PREVIEW + COUNTDOWN -->
+  <section class="screen" id="screen-preview">
+    <div id="videoWrap">
+      <video id="previewVideo" autoplay playsinline muted></video>
+      <div class="wedding-overlay" id="previewWeddingOverlay"></div>
+      <div class="flash-overlay" id="flashOverlay"></div>
+      <div class="countdown-num" id="countdownNum" style="display:none;"></div>
+    </div>
+    <div class="status-text" id="previewStatus">Get ready…</div>
+  </section>
+
+  <!-- RECORDING -->
+  <section class="screen" id="screen-recording">
+    <div id="videoWrapRec" style="position:relative; width:min(92vw,620px); aspect-ratio:3/4; border-radius:24px; overflow:hidden; border:2px solid rgba(192,57,43,.6); box-shadow:0 0 90px rgba(192,57,43,.2);">
+      <video id="recVideo" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+      <div class="wedding-overlay" id="recWeddingOverlay"></div>
+      <div class="rec-indicator"><span class="rec-dot"></span>Recording</div>
+      <div class="timer" id="recTimer">0:00</div>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="btn-row">
+      <button class="btn stop" id="stopBtn">Stop</button>
+    </div>
+  </section>
+
+  <!-- RESULT: media + QR (auto-generated) + Send/Redo/Discard -->
+  <section class="screen" id="screen-done">
+    <div id="donePhotoWrap" style="display:none;">
+      <img id="photoResult" alt="Captured photo">
+    </div>
+    <div id="doneVideoWrap" style="display:none;">
+      <video id="videoResult" controls playsinline></video>
+    </div>
+
+    <div class="status-text" id="qrStatus">Preparing your QR code…</div>
+    <div id="qrBox"></div>
+    <div class="error-box" id="qrError" style="display:none;"></div>
+    <button class="btn ghost" id="qrRetryBtn" style="display:none; margin-top:2vh;">Try QR Again</button>
+
+    <div class="btn-row">
+      <button class="btn" id="sendBtn">Send It To Us</button>
+    </div>
+    <div class="btn-row" style="margin-top:1.5vh;">
+      <button class="btn ghost" id="redoBtn">Redo</button>
+      <button class="btn ghost danger" id="discardBtn">Discard</button>
+    </div>
+  </section>
+
+</div>
+
+<button id="fsBtn">Full Screen</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+
+  // ============================================================
+  //  CUSTOMIZE THE IDLE SCREEN HERE
+  // ============================================================
+  const CONFIG = {
+    topText: "Enter a name",       // curved text over the top of the circle
+    bottomText: "custom text",       // curved text under the bottom of the circle
+    centerLine1: "01 - 01 - 20xx",   // small line in the middle (optional, set "" to hide)
+    centerLine2: "",                 // second small center line (optional)
+    ringColor: "#b8934a",            // circle ring color
+    textColor: "#1c1c1c",            // curved text color
+    centerColor: "#b8934a",          // center text color
+    bgColor: "#ffffff",              // idle screen background
+    letterSpacingDeg: 8.2,           // degrees between characters on the arc
+    fontSize: 22                     // px, in a 0-0-500-500 viewBox
+  };
+  // ============================================================
+
+  const $ = id => document.getElementById(id);
+
+  const screens = {
+    idle: $('screen-idle'),
+    choice: $('screen-choice'),
+    loading: $('screen-loading'),
+    error: $('screen-error'),
+    filter: $('screen-filter'),
+    preview: $('screen-preview'),
+    recording: $('screen-recording'),
+    done: $('screen-done'),
+  };
+
+  // ---------------- Wedding-appropriate filters ----------------
+  // css: applied live to the video preview AND baked into the captured photo/video
+  // swatch: quick visual sample shown on the picker dot
+  const FILTERS = [
+    { id:'none',    name:'Original',       css:'none',                                                    swatch:'linear-gradient(135deg,#f5f0e6,#cfc7b6)' },
+    { id:'wedding', name:'Wedding Frame',  css:'none',                                                    swatch:'radial-gradient(circle at center, transparent 48%, #b8934a 50%, transparent 53%)' },
+    { id:'bw',      name:'Classic B&W',    css:'grayscale(1) contrast(1.15) brightness(1.03)',            swatch:'linear-gradient(135deg,#ffffff,#1c1c1c)' },
+    { id:'sepia',   name:'Vintage Sepia',  css:'sepia(.55) contrast(1.05) brightness(1.05) saturate(1.05)', swatch:'linear-gradient(135deg,#e9c98a,#6f4a26)' },
+    { id:'soft',    name:'Soft Romantic',  css:'brightness(1.08) contrast(.92) saturate(1.15)',           swatch:'linear-gradient(135deg,#ffe1ec,#fff6f0)' },
+    { id:'golden',  name:'Golden Hour',    css:'sepia(.25) saturate(1.35) brightness(1.05) contrast(1.05)', swatch:'linear-gradient(135deg,#ffd79a,#c9822c)' },
+  ];
+
+  let filterCSS = FILTERS[0].css;
+  let selectedFilterId = 'none';
+
+  const WEDDING_OVERLAY = {
+    date: '08 • 23 • 2026',
+    topText: 'OUR WEDDING',
+    bottomText: 'ENTER NAMES',
+    ringColor: '#b8934a',
+    textColor: '#ffffff'
+  };
+
+  function applyFilterToLivePreviews(){
+    [filterVideo, previewVideo, recVideo].forEach(v => { if(v) v.style.filter = filterCSS; });
+  }
+
+
+  function buildWeddingOverlaySvg(){
+    const top = WEDDING_OVERLAY.topText.toUpperCase();
+    const bottom = WEDDING_OVERLAY.bottomText.toUpperCase();
+    const date = WEDDING_OVERLAY.date;
+
+    return `
+      <svg viewBox="0 0 500 640" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <path id="topArcPath" d="M 105 350 A 145 145 0 0 1 395 350" />
+          <path id="bottomArcPath" d="M 395 350 A 145 145 0 0 1 105 350" />
+        </defs>
+
+        <text x="250" y="86"
+              text-anchor="middle"
+              font-family="Georgia, 'Times New Roman', serif"
+              font-size="18"
+              letter-spacing="4"
+              fill="${WEDDING_OVERLAY.textColor}">
+          ${date}
+        </text>
+
+        <circle cx="250" cy="350" r="160"
+                fill="none"
+                stroke="${WEDDING_OVERLAY.ringColor}"
+                stroke-width="2.4" />
+
+        <circle cx="250" cy="350" r="150"
+                fill="none"
+                stroke="${WEDDING_OVERLAY.ringColor}"
+                stroke-width="1.2"
+                opacity="0.55" />
+
+        <circle cx="82" cy="350" r="3.2" fill="${WEDDING_OVERLAY.ringColor}" />
+        <circle cx="418" cy="350" r="3.2" fill="${WEDDING_OVERLAY.ringColor}" />
+
+        <text font-family="Georgia, 'Times New Roman', serif"
+              font-size="21"
+              letter-spacing="6"
+              fill="${WEDDING_OVERLAY.textColor}">
+          <textPath href="#topArcPath" startOffset="50%" text-anchor="middle">${top}</textPath>
+        </text>
+
+        <text font-family="Georgia, 'Times New Roman', serif"
+              font-size="21"
+              letter-spacing="6"
+              fill="${WEDDING_OVERLAY.textColor}">
+          <textPath href="#bottomArcPath" startOffset="50%" text-anchor="middle">${bottom}</textPath>
+        </text>
+      </svg>
+    `;
+  }
+
+  function refreshWeddingOverlays(){
+    ['filterWeddingOverlay','previewWeddingOverlay','recWeddingOverlay'].forEach(id => {
+      const el = $(id);
+      if(!el) return;
+      el.innerHTML = buildWeddingOverlaySvg();
+      el.classList.toggle('active', selectedFilterId === 'wedding');
+    });
+
+    $('customizeOverlayBtn').style.display = selectedFilterId === 'wedding' ? 'inline-block' : 'none';
+    if(selectedFilterId !== 'wedding'){
+      $('overlayCustomizer').classList.remove('active');
+    }
+  }
+
+  function updateWeddingOverlayFromInputs(){
+    WEDDING_OVERLAY.date = $('overlayDateInput').value || '';
+    WEDDING_OVERLAY.topText = $('overlayTopInput').value || '';
+    WEDDING_OVERLAY.bottomText = $('overlayBottomInput').value || '';
+    refreshWeddingOverlays();
+  }
+
+  function buildFilterSwatches(){
+    const row = $('filterSwatches');
+    row.innerHTML = '';
+    FILTERS.forEach((f, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'filter-swatch' + (i === 0 ? ' active' : '');
+      btn.dataset.id = f.id;
+      btn.innerHTML = `<span class="dot" style="background:${f.swatch}"></span><span class="name">${f.name}</span>`;
+      btn.addEventListener('click', () => {
+        selectedFilterId = f.id;
+        filterCSS = f.css;
+        row.querySelectorAll('.filter-swatch').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilterToLivePreviews();
+        refreshWeddingOverlays();
+      });
+      row.appendChild(btn);
+    });
+  }
+
+  function show(name){
+    Object.values(screens).forEach(s => { s.classList.remove('active'); s.classList.remove('leaving'); });
+    screens[name].classList.add('active');
+  }
+
+  // ---------------- Idle screen: build circular text SVG ----------------
+  function buildIdleSvg(){
+    document.body.style.setProperty('--paper', CONFIG.bgColor);
+    const wrap = $('idleSvgWrap');
+    const cx = 250, cy = 250, R = 190;
+    const NS = 'http://www.w3.org/2000/svg';
+
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 500 500');
+
+    // background circle (paper)
+    const bg = document.createElementNS(NS, 'circle');
+    bg.setAttribute('cx', cx); bg.setAttribute('cy', cy); bg.setAttribute('r', R + 34);
+    bg.setAttribute('fill', CONFIG.bgColor);
+    svg.appendChild(bg);
+
+    // ring
+    const ring = document.createElementNS(NS, 'circle');
+    ring.setAttribute('cx', cx); ring.setAttribute('cy', cy); ring.setAttribute('r', R);
+    ring.setAttribute('fill', 'none');
+    ring.setAttribute('stroke', CONFIG.ringColor);
+    ring.setAttribute('stroke-width', '1.5');
+    svg.appendChild(ring);
+
+    // inner ring (subtle double-line, common on invitation seals)
+    const ring2 = document.createElementNS(NS, 'circle');
+    ring2.setAttribute('cx', cx); ring2.setAttribute('cy', cy); ring2.setAttribute('r', R - 10);
+    ring2.setAttribute('fill', 'none');
+    ring2.setAttribute('stroke', CONFIG.ringColor);
+    ring2.setAttribute('stroke-width', '0.75');
+    ring2.setAttribute('opacity', '0.5');
+    svg.appendChild(ring2);
+
+    const textR = R - 30;
+
+    function placeArc(text, centerAngle, isBottom){
+      const chars = text.split('');
+      const n = chars.length;
+      const total = CONFIG.letterSpacingDeg * (n - 1);
+      const start = centerAngle - total / 2;
+      const g = document.createElementNS(NS, 'g');
+      chars.forEach((ch, i) => {
+        if(ch === ' '){ return; } // skip rendering spaces but keep their angular slot
+        // On the bottom half of the circle, sin(angle) runs backwards relative to
+        // character index (past the 90°/270° turning points), so walking the string
+        // forward would place letters right-to-left. Reverse the angle walk there so
+        // "OUR WEDDING" still reads left-to-right, upright, under the ring.
+        const angle = isBottom
+          ? (centerAngle + total / 2) - CONFIG.letterSpacingDeg * i
+          : start + CONFIG.letterSpacingDeg * i;
+        const rad = angle * Math.PI / 180;
+        const x = cx + textR * Math.sin(rad);
+        const y = cy - textR * Math.cos(rad);
+        const rotate = isBottom ? angle + 180 : angle;
+
+        const t = document.createElementNS(NS, 'text');
+        t.setAttribute('x', x);
+        t.setAttribute('y', y);
+        t.setAttribute('text-anchor', 'middle');
+        t.setAttribute('dominant-baseline', 'middle');
+        t.setAttribute('font-size', CONFIG.fontSize);
+        t.setAttribute('font-family', "Georgia, 'Times New Roman', serif");
+        t.setAttribute('letter-spacing', '1');
+        t.setAttribute('fill', CONFIG.textColor);
+        t.setAttribute('transform', `rotate(${rotate} ${x} ${y})`);
+        t.textContent = ch;
+        g.appendChild(t);
+      });
+      svg.appendChild(g);
+    }
+
+    // top arc: centered at angle 0 (12 o'clock)
+    placeArc(CONFIG.topText.toUpperCase(), 0, false);
+    // bottom arc: centered at angle 180 (6 o'clock), letters flipped to read inward/upright
+    placeArc(CONFIG.bottomText.toUpperCase(), 180, true);
+
+    // small ornamental dots between top/bottom text and the sides
+    [90, 270].forEach(a => {
+      const rad = a * Math.PI / 180;
+      const d = document.createElementNS(NS, 'circle');
+      d.setAttribute('cx', cx + textR * Math.sin(rad));
+      d.setAttribute('cy', cy - textR * Math.cos(rad));
+      d.setAttribute('r', 2.5);
+      d.setAttribute('fill', CONFIG.ringColor);
+      svg.appendChild(d);
+    });
+
+    // center text lines
+    if(CONFIG.centerLine1){
+      const c1 = document.createElementNS(NS, 'text');
+      c1.setAttribute('x', cx);
+      c1.setAttribute('y', CONFIG.centerLine2 ? cy - 6 : cy);
+      c1.setAttribute('text-anchor', 'middle');
+      c1.setAttribute('dominant-baseline', 'middle');
+      c1.setAttribute('font-size', 15);
+      c1.setAttribute('letter-spacing', '3');
+      c1.setAttribute('font-family', "Georgia, serif");
+      c1.setAttribute('fill', CONFIG.centerColor);
+      c1.textContent = CONFIG.centerLine1;
+      svg.appendChild(c1);
+    }
+    if(CONFIG.centerLine2){
+      const c2 = document.createElementNS(NS, 'text');
+      c2.setAttribute('x', cx);
+      c2.setAttribute('y', cy + 18);
+      c2.setAttribute('text-anchor', 'middle');
+      c2.setAttribute('dominant-baseline', 'middle');
+      c2.setAttribute('font-size', 12);
+      c2.setAttribute('letter-spacing', '2');
+      c2.setAttribute('font-family', "Georgia, serif");
+      c2.setAttribute('fill', CONFIG.centerColor);
+      c2.setAttribute('opacity', '0.75');
+      c2.textContent = CONFIG.centerLine2;
+      svg.appendChild(c2);
+    }
+
+    // Center hotspot — this is the only tappable area on the idle screen.
+    // fill="transparent" (not "none") so it still receives clicks while staying invisible.
+    const hotspotR = textR - 32;
+    const hotspot = document.createElementNS(NS, 'circle');
+    hotspot.setAttribute('id', 'idleHotspot');
+    hotspot.setAttribute('cx', cx);
+    hotspot.setAttribute('cy', cy);
+    hotspot.setAttribute('r', hotspotR);
+    hotspot.setAttribute('fill', 'transparent');
+    svg.appendChild(hotspot);
+
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+  }
+  buildIdleSvg();
+
+  // ---------------- Recording config ----------------
+  const MIN_SECONDS = 10;
+  const MAX_SECONDS = 30;
+  const COUNTDOWN_FROM = 3;
+
+  let mode = 'photo'; // 'photo' | 'video' — set when the guest taps Picture or Video
+  let stream = null;
+  let mediaRecorder = null;
+  let chunks = [];
+  let recordStartTime = null;
+  let recordTimerInterval = null;
+  let autoStopTimeout = null;
+  let recordedBlobUrl = null;
+  let recordedVideoBlob = null;
+  let capturedPhotoBlob = null;
+  let capturedPhotoUrl = null;
+  let drawLoopId = null; // requestAnimationFrame id for the filtered video capture loop
+  const recCanvas = document.createElement('canvas');   // used only while recording video (filter baked in)
+  const photoCanvas = document.createElement('canvas'); // used to snap a filtered still photo
+
+  const filterVideo = $('filterVideo');
+  const previewVideo = $('previewVideo');
+  const recVideo = $('recVideo');
+  const countdownNum = $('countdownNum');
+  const previewStatus = $('previewStatus');
+  const recTimer = $('recTimer');
+  const progressFill = $('progressFill');
+  const errorMsg = $('errorMsg');
+
+  buildFilterSwatches();
+  refreshWeddingOverlays();
+
+  $('customizeOverlayBtn').addEventListener('click', () => {
+    $('overlayCustomizer').classList.toggle('active');
+  });
+
+  ['overlayDateInput','overlayTopInput','overlayBottomInput'].forEach(id => {
+    $(id).addEventListener('input', updateWeddingOverlayFromInputs);
+  });
+
+  // Only the center of the circle is tappable to begin — not the whole screen.
+  // Fades and gently zooms the idle screen out, then hands off to the Picture/Video choice.
+  document.getElementById('idleHotspot').addEventListener('click', () => {
+    screens.idle.classList.add('leaving');
+    setTimeout(() => { show('choice'); }, 550);
+  });
+
+  $('choosePhotoBtn').addEventListener('click', () => {
+    mode = 'photo';
+    screens.choice.classList.add('leaving');
+    setTimeout(initCamera, 400);
+  });
+  $('chooseVideoBtn').addEventListener('click', () => {
+    mode = 'video';
+    screens.choice.classList.add('leaving');
+    setTimeout(initCamera, 400);
+  });
+
+  async function initCamera(){
+    show('loading');
+    try{
+      // reuse an already-open stream on redo instead of re-requesting permission
+      if(!stream){
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 1600 } },
+          audio: { echoCancellation: true, noiseSuppression: true }
+        });
+      }
+      filterVideo.srcObject = stream;
+      previewVideo.srcObject = stream;
+      recVideo.srcObject = stream;
+      applyFilterToLivePreviews();
+      refreshWeddingOverlays();
+      show('filter');
+    } catch(err){
+      console.error(err);
+      errorMsg.textContent = (err && err.name === 'NotAllowedError')
+        ? 'Camera or microphone permission was denied. Please allow access and try again.'
+        : 'Could not access camera or microphone: ' + (err.message || err.name || 'unknown error');
+      show('error');
+    }
+  }
+
+  $('filterContinueBtn').addEventListener('click', () => {
+    applyFilterToLivePreviews();
+    show('preview');
+    startCountdown();
+  });
+  $('filterBackBtn').addEventListener('click', resetToIdle);
+
+  function startCountdown(){
+    previewStatus.textContent = mode === 'photo' ? 'Get ready to smile…' : 'Get ready…';
+    countdownNum.style.display = 'flex';
+    let n = COUNTDOWN_FROM;
+    countdownNum.textContent = n;
+    countdownNum.style.animation = 'none';
+    void countdownNum.offsetWidth;
+    countdownNum.style.animation = 'pulse .9s ease-out';
+
+    const tick = () => {
+      n -= 1;
+      if(n > 0){
+        countdownNum.textContent = n;
+        countdownNum.style.animation = 'none';
+        void countdownNum.offsetWidth;
+        countdownNum.style.animation = 'pulse .9s ease-out';
+        setTimeout(tick, 1000);
+      } else {
+        countdownNum.style.display = 'none';
+        if(mode === 'photo'){ capturePhoto(); } else { beginRecording(); }
+      }
+    };
+    setTimeout(tick, 1000);
+  }
+
+  function showFlash(){
+    const el = $('flashOverlay');
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 150);
+  }
+
+  // Draws the current (mirrored, filtered) video frame onto a canvas — used for both
+  // the still-photo snapshot and, on a loop, for the filtered video recording below.
+  function drawFilteredFrame(ctx, videoEl, w, h){
+    ctx.save();
+    ctx.filter = filterCSS;
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(videoEl, 0, 0, w, h);
+    ctx.restore();
+
+    if(selectedFilterId === 'wedding'){
+      drawWeddingOverlayOnCanvas(ctx, w, h);
+    }
+  }
+
+  function drawWeddingOverlayOnCanvas(ctx, w, h){
+    const sx = w / 500;
+    const sy = h / 640;
+
+    ctx.save();
+    ctx.scale(sx, sy);
+
+    const cx = 250;
+    const cy = 350;
+    const r1 = 160;
+    const r2 = 150;
+    const gold = WEDDING_OVERLAY.ringColor;
+    const white = WEDDING_OVERLAY.textColor;
+
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r1, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.arc(82, 350, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(418, 350, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = white;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "18px Georgia";
+    drawSpacedText(ctx, WEDDING_OVERLAY.date, 250, 86, 4);
+
+    drawArcText(ctx, WEDDING_OVERLAY.topText.toUpperCase(), cx, cy, 164, -Math.PI * 0.78, Math.PI * 0.78, false);
+    drawArcText(ctx, WEDDING_OVERLAY.bottomText.toUpperCase(), cx, cy, 164, Math.PI * 0.78, Math.PI * 2.22, true);
+
+    ctx.restore();
+  }
+
+  function drawSpacedText(ctx, text, x, y, spacing){
+    const chars = [...text];
+    const widths = chars.map(ch => ctx.measureText(ch).width);
+    const total = widths.reduce((a,b)=>a+b,0) + spacing * Math.max(0, chars.length - 1);
+    let cursor = x - total / 2;
+
+    chars.forEach((ch, i) => {
+      const cw = widths[i];
+      ctx.fillText(ch, cursor + cw / 2, y);
+      cursor += cw + spacing;
+    });
+  }
+
+  function drawArcText(ctx, text, cx, cy, radius, startAngle, endAngle, bottom){
+    const chars = [...text];
+    if(!chars.length) return;
+
+    const totalAngle = endAngle - startAngle;
+    ctx.font = "21px Georgia";
+    ctx.fillStyle = WEDDING_OVERLAY.textColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    chars.forEach((ch, i) => {
+      const t = chars.length === 1 ? 0.5 : i / (chars.length - 1);
+      const angle = startAngle + totalAngle * t;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(bottom ? angle - Math.PI / 2 : angle + Math.PI / 2);
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
+    });
+  }
+
+  function capturePhoto(){
+    showFlash();
+    const w = previewVideo.videoWidth || 720;
+    const h = previewVideo.videoHeight || 960;
+    photoCanvas.width = w;
+    photoCanvas.height = h;
+    const ctx = photoCanvas.getContext('2d');
+    drawFilteredFrame(ctx, previewVideo, w, h);
+
+    photoCanvas.toBlob(blob => {
+      if(capturedPhotoUrl) URL.revokeObjectURL(capturedPhotoUrl);
+      capturedPhotoBlob = blob;
+      capturedPhotoUrl = URL.createObjectURL(blob);
+
+      $('photoResult').src = capturedPhotoUrl;
+      $('donePhotoWrap').style.display = 'block';
+      $('doneVideoWrap').style.display = 'none';
+      showResult();
+    }, 'image/jpeg', 0.92);
+  }
+
+  function beginRecording(){
+    chunks = [];
+    const vw = recVideo.videoWidth || 720;
+    const vh = recVideo.videoHeight || 960;
+    recCanvas.width = vw;
+    recCanvas.height = vh;
+    const ctx = recCanvas.getContext('2d');
+
+    // Redraw every frame with the chosen filter baked in, then capture the canvas
+    // as a video track so the filter shows up in the saved recording, not just the preview.
+    (function drawLoop(){
+      drawFilteredFrame(ctx, recVideo, recCanvas.width, recCanvas.height);
+      drawLoopId = requestAnimationFrame(drawLoop);
+    })();
+
+    const canvasStream = recCanvas.captureStream(30);
+    const combinedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...stream.getAudioTracks()
+    ]);
+
+    let mimeType = '';
+    const candidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4'
+    ];
+    for(const c of candidates){
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)){
+        mimeType = c; break;
+      }
+    }
+
+    try{
+      mediaRecorder = mimeType ? new MediaRecorder(combinedStream, { mimeType }) : new MediaRecorder(combinedStream);
+    } catch(e){
+      mediaRecorder = new MediaRecorder(combinedStream);
+    }
+
+    mediaRecorder.ondataavailable = e => { if(e.data && e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = () => onRecordingStopped(canvasStream);
+
+    mediaRecorder.start();
+    recordStartTime = Date.now();
+    show('recording');
+
+    recordTimerInterval = setInterval(updateTimer, 100);
+    autoStopTimeout = setTimeout(() => stopRecording(), MAX_SECONDS * 1000);
+  }
+
+  function updateTimer(){
+    const elapsed = (Date.now() - recordStartTime) / 1000;
+    const m = Math.floor(elapsed / 60);
+    const s = Math.floor(elapsed % 60);
+    recTimer.textContent = m + ':' + String(s).padStart(2,'0');
+    const pct = Math.min(100, (elapsed / MAX_SECONDS) * 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  function stopRecording(){
+    if(!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    clearInterval(recordTimerInterval);
+    clearTimeout(autoStopTimeout);
+    mediaRecorder.stop();
+  }
+
+  function onRecordingStopped(canvasStream){
+    cancelAnimationFrame(drawLoopId);
+    // stop only the canvas video track — keep the underlying camera stream alive for a redo
+    if(canvasStream) canvasStream.getVideoTracks().forEach(t => t.stop());
+
+    const blob = new Blob(chunks, { type: mediaRecorder.mimeType || 'video/webm' });
+    recordedVideoBlob = blob;
+    if(recordedBlobUrl) URL.revokeObjectURL(recordedBlobUrl);
+    recordedBlobUrl = URL.createObjectURL(blob);
+
+    $('videoResult').src = recordedBlobUrl;
+    $('doneVideoWrap').style.display = 'block';
+    $('donePhotoWrap').style.display = 'none';
+    showResult();
+  }
+
+  // Send the guest back to filter/retake without re-requesting camera permission.
+  function redoCapture(){
+    cancelAnimationFrame(drawLoopId);
+    chunks = [];
+    mediaRecorder = null;
+    progressFill.style.width = '0%';
+    recTimer.textContent = '0:00';
+    refreshWeddingOverlays();
+    show('filter');
+  }
+
+  function resetToIdle(){
+    cancelAnimationFrame(drawLoopId);
+    if(stream){
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    if(recordedBlobUrl){ URL.revokeObjectURL(recordedBlobUrl); recordedBlobUrl = null; }
+    if(capturedPhotoUrl){ URL.revokeObjectURL(capturedPhotoUrl); capturedPhotoUrl = null; }
+    recordedVideoBlob = null;
+    capturedPhotoBlob = null;
+    chunks = [];
+    mediaRecorder = null;
+    progressFill.style.width = '0%';
+    recTimer.textContent = '0:00';
+    show('idle');
+  }
+
+  // ---------------- QR code sharing ----------------
+  // No backend is included here, so this uploads the captured file to a free,
+  // no-login temporary file host (tmpfiles.org) and QR-encodes the returned link.
+  // For an actual wedding day, swap uploadForQr() to point at your own reliable
+  // storage (e.g. Firebase Storage, an S3 bucket, Cloudinary) — a free public
+  // host is fine for testing but isn't guaranteed to stay up under real load.
+  async function uploadForQr(blob, filename){
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+    const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: formData });
+    if(!res.ok) throw new Error('Upload failed');
+    const data = await res.json();
+    let url = data && data.data && data.data.url;
+    if(!url) throw new Error('No URL returned');
+    // tmpfiles.org serves a preview page by default; /dl/ gives the direct file
+    url = url.replace('http://', 'https://').replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    return url;
+  }
+
+  async function showResult(){
+    show('done');
+    $('qrBox').innerHTML = '';
+    $('qrError').style.display = 'none';
+    $('qrRetryBtn').style.display = 'none';
+    $('qrStatus').style.display = 'block';
+    $('qrStatus').textContent = `Uploading your ${mode === 'photo' ? 'photo' : 'video'}…`;
+
+    try{
+      const blob = mode === 'photo' ? capturedPhotoBlob : recordedVideoBlob;
+      if(!blob) throw new Error('Nothing captured yet');
+      const ext = mode === 'photo' ? 'jpg' : (recordedVideoBlob.type.includes('mp4') ? 'mp4' : 'webm');
+      const filename = `mirror-message-${Date.now()}.${ext}`;
+      const url = await uploadForQr(blob, filename);
+
+      $('qrStatus').textContent = 'Scan to save on your phone';
+      $('qrBox').innerHTML = '';
+      new QRCode($('qrBox'), { text: url, width: 180, height: 180, colorDark: '#1c1c1c', colorLight: '#ffffff' });
+    } catch(err){
+      console.error(err);
+      $('qrStatus').style.display = 'none';
+      $('qrError').textContent = "Couldn't create a QR code — please check the internet connection. \"Send It To Us\" below still works.";
+      $('qrError').style.display = 'block';
+      $('qrRetryBtn').style.display = 'inline-block';
+    }
+  }
+
+  // Saves the captured photo/video onto the machine running the mirror
+  // (triggers a normal browser download into its Downloads folder).
+  function saveLocally(){
+    const blob = mode === 'photo' ? capturedPhotoBlob : recordedVideoBlob;
+    const url = mode === 'photo' ? capturedPhotoUrl : recordedBlobUrl;
+    if(!blob || !url) return;
+    const ext = mode === 'photo' ? 'jpg' : (blob.type.includes('mp4') ? 'mp4' : 'webm');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mirror-message-${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    const btn = $('sendBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Saved ✓';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 2000);
+  }
+
+  function toggleFullscreen(){
+    if(!document.fullscreenElement){
+      document.documentElement.requestFullscreen().catch(()=>{});
+    } else {
+      document.exitFullscreen().catch(()=>{});
+    }
+  }
+
+  $('retryBtn').addEventListener('click', initCamera);
+  $('backBtn').addEventListener('click', resetToIdle);
+  $('stopBtn').addEventListener('click', stopRecording);
+  $('fsBtn').addEventListener('click', toggleFullscreen);
+
+  $('sendBtn').addEventListener('click', saveLocally);
+  $('redoBtn').addEventListener('click', redoCapture);
+  $('discardBtn').addEventListener('click', resetToIdle);
+  $('qrRetryBtn').addEventListener('click', showResult);
+
+  setInterval(() => {
+    if(mediaRecorder && mediaRecorder.state === 'recording'){
+      const elapsed = (Date.now() - recordStartTime) / 1000;
+      const stopBtn = $('stopBtn');
+      if(elapsed < MIN_SECONDS){
+        stopBtn.textContent = `Stop (${Math.ceil(MIN_SECONDS - elapsed)}s min)`;
+      } else {
+        stopBtn.textContent = 'Stop';
+      }
+    }
+  }, 250);
+
+})();
+</script>
+
+</body>
+</html>
