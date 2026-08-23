@@ -311,6 +311,71 @@
     white-space:nowrap;
   }
 
+
+  /* ---------- Wedding overlay filter ---------- */
+  .wedding-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    display:none;
+  }
+
+  .wedding-overlay.active{ display:block; }
+
+  .wedding-overlay svg{
+    width:100%;
+    height:100%;
+    display:block;
+  }
+
+  .overlay-customizer{
+    width:min(92vw, 620px);
+    margin-top:2vh;
+    display:none;
+    grid-template-columns: 1fr;
+    gap:1vh;
+  }
+
+  .overlay-customizer.active{ display:grid; }
+
+  .overlay-customizer input{
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    border:1px solid rgba(212,175,55,.5);
+    background:rgba(255,255,255,.05);
+    color:var(--white);
+    font-family:'Georgia', serif;
+    font-size:16px;
+    text-align:center;
+    outline:none;
+  }
+
+  .overlay-customizer input:focus{
+    border-color:var(--gold-bright);
+    box-shadow:0 0 20px rgba(212,175,55,.2);
+  }
+
+  .overlay-label{
+    color:rgba(245,245,240,.7);
+    font-size:13px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+
+  .small-btn{
+    font-family:'Georgia', serif;
+    background:transparent;
+    color:var(--gold-bright);
+    border:1px solid rgba(212,175,55,.6);
+    border-radius:100px;
+    padding:10px 18px;
+    font-size:13px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+
   /* ---------- Done screen media ---------- */
   #donePhotoWrap img, #doneVideoWrap video{
     width: min(46vw, 230px);
@@ -348,8 +413,8 @@
 
   <!-- CHOICE: picture or video -->
   <section class="screen" id="screen-choice">
-    <div class="eyebrow">Leave a</div>
-    <div class="headline">Picture or<br><em>Video?</em></div>
+    <!-- <div class="headline">Leave a</div> need to check -->
+    <div class="headline"> <em>Leave a<br></em>Picture or<br><em>Video?</em></div>
     <div class="choice-row">
       <button class="choice-btn" id="choosePhotoBtn">
         <span class="choice-icon">📷</span>
@@ -380,10 +445,27 @@
   <!-- FILTER PICKER -->
   <section class="screen" id="screen-filter">
     <div class="headline" style="margin-bottom:1vh;">Choose a <em>Filter</em></div>
+
     <div class="video-frame" id="filterVideoWrap">
       <video id="filterVideo" autoplay playsinline muted></video>
+      <div class="wedding-overlay" id="filterWeddingOverlay"></div>
     </div>
+
     <div class="filter-row" id="filterSwatches"></div>
+
+    <button class="small-btn" id="customizeOverlayBtn" style="display:none; margin-top:1.8vh;">Customize Frame</button>
+
+    <div class="overlay-customizer" id="overlayCustomizer">
+      <div class="overlay-label">Date</div>
+      <input id="overlayDateInput" value="08 • 23 • 2026">
+
+      <div class="overlay-label">Top Text</div>
+      <input id="overlayTopInput" value="OUR WEDDING">
+
+      <div class="overlay-label">Bottom Text</div>
+      <input id="overlayBottomInput" value="ALADDIN & ARWA">
+    </div>
+
     <div class="btn-row">
       <button class="btn" id="filterContinueBtn">Continue</button>
       <button class="btn ghost" id="filterBackBtn">Back</button>
@@ -394,6 +476,7 @@
   <section class="screen" id="screen-preview">
     <div id="videoWrap">
       <video id="previewVideo" autoplay playsinline muted></video>
+      <div class="wedding-overlay" id="previewWeddingOverlay"></div>
       <div class="flash-overlay" id="flashOverlay"></div>
       <div class="countdown-num" id="countdownNum" style="display:none;"></div>
     </div>
@@ -404,6 +487,7 @@
   <section class="screen" id="screen-recording">
     <div id="videoWrapRec" style="position:relative; width:min(92vw,620px); aspect-ratio:3/4; border-radius:24px; overflow:hidden; border:2px solid rgba(192,57,43,.6); box-shadow:0 0 90px rgba(192,57,43,.2);">
       <video id="recVideo" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;"></video>
+      <div class="wedding-overlay" id="recWeddingOverlay"></div>
       <div class="rec-indicator"><span class="rec-dot"></span>Recording</div>
       <div class="timer" id="recTimer">0:00</div>
     </div>
@@ -448,9 +532,9 @@
   //  CUSTOMIZE THE IDLE SCREEN HERE
   // ============================================================
   const CONFIG = {
-    topText: "SOPHIA & JAMES",       // curved text over the top of the circle
-    bottomText: "OUR WEDDING",       // curved text under the bottom of the circle
-    centerLine1: "06 · 15 · 2026",   // small line in the middle (optional, set "" to hide)
+    topText: "Enter a name",       // curved text over the top of the circle
+    bottomText: "custom text",       // curved text under the bottom of the circle
+    centerLine1: "01 - 01 - 20xx",   // small line in the middle (optional, set "" to hide)
     centerLine2: "",                 // second small center line (optional)
     ringColor: "#b8934a",            // circle ring color
     textColor: "#1c1c1c",            // curved text color
@@ -478,16 +562,101 @@
   // css: applied live to the video preview AND baked into the captured photo/video
   // swatch: quick visual sample shown on the picker dot
   const FILTERS = [
-    { id:'none',   name:'Original',       css:'none',                                                    swatch:'linear-gradient(135deg,#f5f0e6,#cfc7b6)' },
-    { id:'bw',     name:'Classic B&W',    css:'grayscale(1) contrast(1.15) brightness(1.03)',            swatch:'linear-gradient(135deg,#ffffff,#1c1c1c)' },
-    { id:'sepia',  name:'Vintage Sepia',  css:'sepia(.55) contrast(1.05) brightness(1.05) saturate(1.05)', swatch:'linear-gradient(135deg,#e9c98a,#6f4a26)' },
-    { id:'soft',   name:'Soft Romantic',  css:'brightness(1.08) contrast(.92) saturate(1.15)',           swatch:'linear-gradient(135deg,#ffe1ec,#fff6f0)' },
-    { id:'golden', name:'Golden Hour',    css:'sepia(.25) saturate(1.35) brightness(1.05) contrast(1.05)', swatch:'linear-gradient(135deg,#ffd79a,#c9822c)' },
+    { id:'none',    name:'Original',       css:'none',                                                    swatch:'linear-gradient(135deg,#f5f0e6,#cfc7b6)' },
+    { id:'wedding', name:'Wedding Frame',  css:'none',                                                    swatch:'radial-gradient(circle at center, transparent 48%, #b8934a 50%, transparent 53%)' },
+    { id:'bw',      name:'Classic B&W',    css:'grayscale(1) contrast(1.15) brightness(1.03)',            swatch:'linear-gradient(135deg,#ffffff,#1c1c1c)' },
+    { id:'sepia',   name:'Vintage Sepia',  css:'sepia(.55) contrast(1.05) brightness(1.05) saturate(1.05)', swatch:'linear-gradient(135deg,#e9c98a,#6f4a26)' },
+    { id:'soft',    name:'Soft Romantic',  css:'brightness(1.08) contrast(.92) saturate(1.15)',           swatch:'linear-gradient(135deg,#ffe1ec,#fff6f0)' },
+    { id:'golden',  name:'Golden Hour',    css:'sepia(.25) saturate(1.35) brightness(1.05) contrast(1.05)', swatch:'linear-gradient(135deg,#ffd79a,#c9822c)' },
   ];
+
   let filterCSS = FILTERS[0].css;
+  let selectedFilterId = 'none';
+
+  const WEDDING_OVERLAY = {
+    date: '08 • 23 • 2026',
+    topText: 'OUR WEDDING',
+    bottomText: 'ALADDIN & ARWA',
+    ringColor: '#b8934a',
+    textColor: '#ffffff'
+  };
 
   function applyFilterToLivePreviews(){
     [filterVideo, previewVideo, recVideo].forEach(v => { if(v) v.style.filter = filterCSS; });
+  }
+
+
+  function buildWeddingOverlaySvg(){
+    const top = WEDDING_OVERLAY.topText.toUpperCase();
+    const bottom = WEDDING_OVERLAY.bottomText.toUpperCase();
+    const date = WEDDING_OVERLAY.date;
+
+    return `
+      <svg viewBox="0 0 500 640" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <path id="topArcPath" d="M 105 350 A 145 145 0 0 1 395 350" />
+          <path id="bottomArcPath" d="M 395 350 A 145 145 0 0 1 105 350" />
+        </defs>
+
+        <text x="250" y="86"
+              text-anchor="middle"
+              font-family="Georgia, 'Times New Roman', serif"
+              font-size="18"
+              letter-spacing="4"
+              fill="${WEDDING_OVERLAY.textColor}">
+          ${date}
+        </text>
+
+        <circle cx="250" cy="350" r="160"
+                fill="none"
+                stroke="${WEDDING_OVERLAY.ringColor}"
+                stroke-width="2.4" />
+
+        <circle cx="250" cy="350" r="150"
+                fill="none"
+                stroke="${WEDDING_OVERLAY.ringColor}"
+                stroke-width="1.2"
+                opacity="0.55" />
+
+        <circle cx="82" cy="350" r="3.2" fill="${WEDDING_OVERLAY.ringColor}" />
+        <circle cx="418" cy="350" r="3.2" fill="${WEDDING_OVERLAY.ringColor}" />
+
+        <text font-family="Georgia, 'Times New Roman', serif"
+              font-size="21"
+              letter-spacing="6"
+              fill="${WEDDING_OVERLAY.textColor}">
+          <textPath href="#topArcPath" startOffset="50%" text-anchor="middle">${top}</textPath>
+        </text>
+
+        <text font-family="Georgia, 'Times New Roman', serif"
+              font-size="21"
+              letter-spacing="6"
+              fill="${WEDDING_OVERLAY.textColor}">
+          <textPath href="#bottomArcPath" startOffset="50%" text-anchor="middle">${bottom}</textPath>
+        </text>
+      </svg>
+    `;
+  }
+
+  function refreshWeddingOverlays(){
+    ['filterWeddingOverlay','previewWeddingOverlay','recWeddingOverlay'].forEach(id => {
+      const el = $(id);
+      if(!el) return;
+      el.innerHTML = buildWeddingOverlaySvg();
+      el.classList.toggle('active', selectedFilterId === 'wedding');
+    });
+
+    $('customizeOverlayBtn').style.display = selectedFilterId === 'wedding' ? 'inline-block' : 'none';
+    if(selectedFilterId !== 'wedding'){
+      $('overlayCustomizer').classList.remove('active');
+    }
+  }
+
+  function updateWeddingOverlayFromInputs(){
+    WEDDING_OVERLAY.date = $('overlayDateInput').value || '';
+    WEDDING_OVERLAY.topText = $('overlayTopInput').value || '';
+    WEDDING_OVERLAY.bottomText = $('overlayBottomInput').value || '';
+    refreshWeddingOverlays();
   }
 
   function buildFilterSwatches(){
@@ -500,10 +669,12 @@
       btn.dataset.id = f.id;
       btn.innerHTML = `<span class="dot" style="background:${f.swatch}"></span><span class="name">${f.name}</span>`;
       btn.addEventListener('click', () => {
+        selectedFilterId = f.id;
         filterCSS = f.css;
         row.querySelectorAll('.filter-swatch').forEach(el => el.classList.remove('active'));
         btn.classList.add('active');
         applyFilterToLivePreviews();
+        refreshWeddingOverlays();
       });
       row.appendChild(btn);
     });
@@ -676,6 +847,15 @@
   const errorMsg = $('errorMsg');
 
   buildFilterSwatches();
+  refreshWeddingOverlays();
+
+  $('customizeOverlayBtn').addEventListener('click', () => {
+    $('overlayCustomizer').classList.toggle('active');
+  });
+
+  ['overlayDateInput','overlayTopInput','overlayBottomInput'].forEach(id => {
+    $(id).addEventListener('input', updateWeddingOverlayFromInputs);
+  });
 
   // Only the center of the circle is tappable to begin — not the whole screen.
   // Fades and gently zooms the idle screen out, then hands off to the Picture/Video choice.
@@ -709,6 +889,7 @@
       previewVideo.srcObject = stream;
       recVideo.srcObject = stream;
       applyFilterToLivePreviews();
+      refreshWeddingOverlays();
       show('filter');
     } catch(err){
       console.error(err);
@@ -766,6 +947,94 @@
     ctx.scale(-1, 1);
     ctx.drawImage(videoEl, 0, 0, w, h);
     ctx.restore();
+
+    if(selectedFilterId === 'wedding'){
+      drawWeddingOverlayOnCanvas(ctx, w, h);
+    }
+  }
+
+  function drawWeddingOverlayOnCanvas(ctx, w, h){
+    const sx = w / 500;
+    const sy = h / 640;
+
+    ctx.save();
+    ctx.scale(sx, sy);
+
+    const cx = 250;
+    const cy = 350;
+    const r1 = 160;
+    const r2 = 150;
+    const gold = WEDDING_OVERLAY.ringColor;
+    const white = WEDDING_OVERLAY.textColor;
+
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r1, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.arc(82, 350, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(418, 350, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = white;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "18px Georgia";
+    drawSpacedText(ctx, WEDDING_OVERLAY.date, 250, 86, 4);
+
+    drawArcText(ctx, WEDDING_OVERLAY.topText.toUpperCase(), cx, cy, 164, -Math.PI * 0.78, Math.PI * 0.78, false);
+    drawArcText(ctx, WEDDING_OVERLAY.bottomText.toUpperCase(), cx, cy, 164, Math.PI * 0.78, Math.PI * 2.22, true);
+
+    ctx.restore();
+  }
+
+  function drawSpacedText(ctx, text, x, y, spacing){
+    const chars = [...text];
+    const widths = chars.map(ch => ctx.measureText(ch).width);
+    const total = widths.reduce((a,b)=>a+b,0) + spacing * Math.max(0, chars.length - 1);
+    let cursor = x - total / 2;
+
+    chars.forEach((ch, i) => {
+      const cw = widths[i];
+      ctx.fillText(ch, cursor + cw / 2, y);
+      cursor += cw + spacing;
+    });
+  }
+
+  function drawArcText(ctx, text, cx, cy, radius, startAngle, endAngle, bottom){
+    const chars = [...text];
+    if(!chars.length) return;
+
+    const totalAngle = endAngle - startAngle;
+    ctx.font = "21px Georgia";
+    ctx.fillStyle = WEDDING_OVERLAY.textColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    chars.forEach((ch, i) => {
+      const t = chars.length === 1 ? 0.5 : i / (chars.length - 1);
+      const angle = startAngle + totalAngle * t;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(bottom ? angle - Math.PI / 2 : angle + Math.PI / 2);
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
+    });
   }
 
   function capturePhoto(){
@@ -879,6 +1148,7 @@
     mediaRecorder = null;
     progressFill.style.width = '0%';
     recTimer.textContent = '0:00';
+    refreshWeddingOverlays();
     show('filter');
   }
 
